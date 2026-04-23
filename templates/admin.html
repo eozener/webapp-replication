@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin – Monetary Policy Game</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="admin-body">
+
+<div class="admin-wrap">
+  <header class="admin-header">
+    <div>
+      <h1>Monetary Policy Game</h1>
+      <p class="subtitle">Instructor Panel</p>
+    </div>
+    <span class="conn-pill" id="conn-status">Connecting…</span>
+  </header>
+
+  <!-- Create session -->
+  <div class="admin-card" id="panel-create">
+    <h2>New Session</h2>
+    <p class="muted" style="margin-bottom:16px">Each session gets a unique 4-letter code. Open a new tab to run sessions in parallel.</p>
+    <button id="btn-create" class="btn btn-primary btn-full">Create Session</button>
+  </div>
+
+  <!-- Session code display (shown after create) -->
+  <div class="admin-card" id="panel-code" style="display:none">
+    <h2>Session Code</h2>
+    <div class="code-display" id="code-display">—</div>
+    <p class="muted" style="margin-top:12px">Share this code with students. They enter it on the join page.</p>
+  </div>
+
+  <!-- Settings & start (shown after create) -->
+  <div class="admin-card" id="panel-settings" style="display:none">
+    <h2>Game Settings</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Policy Regime</label>
+        <select id="param-regime">
+          <option value="0.10">Dual Mandate (λ = 0.10)</option>
+          <option value="0">Inflation Targeting (λ = 0)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Number of Rounds</label>
+        <input type="number" id="param-rounds" value="10" min="1" max="30">
+      </div>
+    </div>
+    <button id="btn-start" class="btn btn-primary btn-full" disabled>
+      Start Game &nbsp;·&nbsp; <span id="player-count">0</span> players connected
+    </button>
+    <p id="admin-error" class="error hidden"></p>
+  </div>
+
+  <!-- Player list (shown after create) -->
+  <div class="admin-card" id="panel-players" style="display:none">
+    <h2>Connected Players</h2>
+    <div id="player-list"><p class="muted">No players yet…</p></div>
+  </div>
+
+  <!-- Progress -->
+  <div class="admin-card" id="panel-progress" style="display:none">
+    <h2>Game Progress</h2>
+    <p id="progress-text" class="progress-text">—</p>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+  </div>
+
+  <!-- Final results -->
+  <div class="admin-card" id="panel-final" style="display:none">
+    <h2>Final Scores</h2>
+    <table class="results-table">
+      <thead>
+        <tr><th>#</th><th>Name</th><th>Role</th><th>Group</th><th>Total Score</th></tr>
+      </thead>
+      <tbody id="results-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const socket = io();
+let totalRounds = 10;
+
+socket.on('connect', () => {
+  document.getElementById('conn-status').textContent = 'Connected';
+  document.getElementById('conn-status').classList.add('conn-ok');
+});
+
+socket.on('disconnect', () => {
+  document.getElementById('conn-status').textContent = 'Disconnected';
+  document.getElementById('conn-status').classList.remove('conn-ok');
+});
+
+socket.on('session_created', data => {
+  document.getElementById('panel-create').style.display = 'none';
+  document.getElementById('code-display').textContent = data.code;
+  document.getElementById('panel-code').style.display = 'block';
+  document.getElementById('panel-settings').style.display = 'block';
+  document.getElementById('panel-players').style.display = 'block';
+  totalRounds = data.params.total_rounds;
+});
+
+socket.on('player_list', players => renderPlayers(players));
+
+socket.on('round_started', data => {
+  totalRounds = data.total;
+  document.getElementById('panel-progress').style.display = 'block';
+  document.getElementById('progress-text').textContent = `Round ${data.round} of ${data.total} in progress…`;
+  const pct = ((data.round - 1) / data.total) * 100;
+  document.getElementById('progress-bar').style.width = pct + '%';
+});
+
+socket.on('final_results', data => {
+  document.getElementById('panel-progress').style.display = 'none';
+  document.getElementById('panel-final').style.display = 'block';
+  const tbody = document.getElementById('results-tbody');
+  tbody.innerHTML = '';
+  data.players.forEach((p, i) => {
+    const tr = document.createElement('tr');
+    if (i === 0) tr.classList.add('top-score');
+    tr.innerHTML = `
+      <td>${i + 1}</td>
+      <td>${esc(p.name)}</td>
+      <td><span class="badge ${p.type === 'cb' ? 'badge-cb' : 'badge-private'}">${p.type === 'cb' ? 'Central Bank' : 'Private'}</span></td>
+      <td>Group ${p.group}</td>
+      <td><strong>${p.total.toFixed(2)}</strong></td>`;
+    tbody.appendChild(tr);
+  });
+});
+
+socket.on('error', data => {
+  const el = document.getElementById('admin-error');
+  el.textContent = data.msg;
+  el.classList.remove('hidden');
+});
+
+document.getElementById('btn-create').addEventListener('click', () => {
+  socket.emit('create_session');
+});
+
+document.getElementById('btn-start').addEventListener('click', () => {
+  const lam = parseFloat(document.getElementById('param-regime').value);
+  const rounds = parseInt(document.getElementById('param-rounds').value);
+  totalRounds = rounds;
+  document.getElementById('admin-error').classList.add('hidden');
+  socket.emit('start_game', { lam, total_rounds: rounds });
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('panel-settings').style.opacity = '0.5';
+});
+
+function renderPlayers(players) {
+  const count = players.length;
+  document.getElementById('player-count').textContent = count;
+  document.getElementById('btn-start').disabled = count < 5;
+  const el = document.getElementById('player-list');
+  if (count === 0) { el.innerHTML = '<p class="muted">No players yet…</p>'; return; }
+  el.innerHTML = players.map(p => `
+    <div class="player-row">
+      <span class="player-name">${esc(p.name)}</span>
+      ${p.type ? `<span class="badge ${p.type === 'cb' ? 'badge-cb' : 'badge-private'}">${p.type === 'cb' ? 'Central Bank' : 'Private'}</span>` : ''}
+      ${p.group ? `<span class="group-tag">Group ${p.group}</span>` : ''}
+    </div>`).join('');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>

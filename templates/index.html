@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monetary Policy Game</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<!-- ── Join ── -->
+<div id="screen-join" class="screen active">
+  <div class="card center">
+    <h1>Monetary Policy Game</h1>
+    <p class="subtitle">A classroom experiment in macroeconomics</p>
+    <div class="form-group">
+      <label for="session-code">Session Code</label>
+      <input type="text" id="session-code" placeholder="e.g. A3K9" maxlength="4" autocomplete="off" style="text-transform:uppercase;letter-spacing:.15em;font-weight:700;">
+    </div>
+    <div class="form-group">
+      <label for="player-name">Your Name</label>
+      <input type="text" id="player-name" placeholder="Enter your name" maxlength="30" autocomplete="off">
+    </div>
+    <button id="btn-join" class="btn btn-primary btn-full">Join Game</button>
+    <p id="join-error" class="error hidden"></p>
+  </div>
+</div>
+
+<!-- ── Lobby ── -->
+<div id="screen-lobby" class="screen">
+  <div class="card center">
+    <h2>You're in!</h2>
+    <p id="lobby-name" class="subtitle"></p>
+    <div class="spinner"></div>
+    <p class="muted">Waiting for the instructor to start the game…</p>
+  </div>
+</div>
+
+<!-- ── Waiting ── -->
+<div id="screen-wait" class="screen">
+  <div class="top-bar"></div>
+  <div class="card center">
+    <div class="round-pill" id="wait-round-pill"></div>
+    <div class="spinner"></div>
+    <p id="wait-msg" class="wait-msg">Please wait…</p>
+    <div class="score-row">
+      <span class="score-label">Total score so far</span>
+      <span class="score-val" id="wait-total">0.00</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Private Agent Turn ── -->
+<div id="screen-private" class="screen">
+  <div class="top-bar"></div>
+  <div class="card">
+    <div class="round-header">
+      <h2>Round <span id="priv-round">1</span> of <span id="priv-total">10</span></h2>
+      <span class="badge badge-private">Private Sector</span>
+    </div>
+
+    <div class="model-box">
+      <div class="model-title">Economic Model</div>
+      <div class="eq"><span class="eq-lhs">Inflation</span> = Avg Expected Inflation + <em id="priv-kappa">0.25</em> × Output Gap</div>
+      <div class="eq"><span class="eq-lhs">Output Gap</span> = <em id="priv-alpha">2</em> − <em id="priv-beta">1</em> × Interest Rate + E</div>
+    </div>
+
+    <div class="input-block">
+      <h3>Your Inflation Forecast</h3>
+      <p class="input-hint">What do you believe the <strong>inflation rate</strong> will be this round?</p>
+      <div class="num-row">
+        <input type="number" id="input-pie" class="num-input" step="0.01" min="0" max="100" placeholder="e.g. 2.50">
+        <span class="unit">%</span>
+      </div>
+      <button id="btn-pie" class="btn btn-primary btn-full">Submit Forecast</button>
+      <p id="pie-error" class="error hidden"></p>
+      <p class="fine-print">Enter any real number to two decimal places. Your score decreases with forecast error.</p>
+    </div>
+
+    <div class="score-row mt">
+      <span class="score-label">Total score so far</span>
+      <span class="score-val" id="priv-total-pay">0.00</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Central Bank Turn ── -->
+<div id="screen-cb" class="screen">
+  <div class="top-bar"></div>
+  <div class="card">
+    <div class="round-header">
+      <h2>Round <span id="cb-round">1</span> of <span id="cb-total">10</span></h2>
+      <span class="badge badge-cb">Central Bank</span>
+    </div>
+
+    <div class="model-box">
+      <div class="model-title">Economic Model</div>
+      <div class="eq"><span class="eq-lhs">Inflation</span> = Avg Expected Inflation + <em id="cb-kappa">0.25</em> × Output Gap</div>
+      <div class="eq"><span class="eq-lhs">Output Gap</span> = <em id="cb-alpha">2</em> − <em id="cb-beta">1</em> × Interest Rate + E</div>
+    </div>
+
+    <div class="info-grid">
+      <div class="info-card">
+        <div class="info-label">Avg Expected Inflation</div>
+        <div class="info-val" id="cb-pie-avg">—</div>
+      </div>
+      <div class="info-card">
+        <div class="info-label">Demand Shock (E)</div>
+        <div class="info-val" id="cb-epsilon">—</div>
+      </div>
+    </div>
+
+    <div class="input-block">
+      <h3>Set the Interest Rate</h3>
+      <p class="input-hint">Choose an interest rate to minimize your loss function:<br>
+        <code>Loss = (Inflation − <span id="cb-target-hint">2.5</span>)² + <span id="cb-lam-hint">0.10</span> × (Output Gap)²</code>
+      </p>
+      <div class="num-row">
+        <input type="number" id="input-r" class="num-input" step="0.01" min="0" max="100" placeholder="e.g. 2.00">
+        <span class="unit">%</span>
+      </div>
+      <button id="btn-r" class="btn btn-primary btn-full">Set Interest Rate</button>
+      <p id="r-error" class="error hidden"></p>
+      <p class="fine-print">Enter any real number to two decimal places.</p>
+    </div>
+
+    <div class="score-row mt">
+      <span class="score-label">Total score so far</span>
+      <span class="score-val" id="cb-total-pay">0.00</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Round Results ── -->
+<div id="screen-results" class="screen">
+  <div class="top-bar"></div>
+  <div class="card">
+    <div class="round-header">
+      <h2>Round <span id="res-round">1</span> Results</h2>
+    </div>
+
+    <div class="results-grid">
+      <div class="res-cell">
+        <div class="res-label">Demand Shock (E)</div>
+        <div class="res-val" id="res-epsilon">—</div>
+      </div>
+      <div class="res-cell">
+        <div class="res-label">Avg Expected Inflation</div>
+        <div class="res-val" id="res-pie-avg">—</div>
+      </div>
+      <div class="res-cell">
+        <div class="res-label">Interest Rate (CB)</div>
+        <div class="res-val" id="res-r">—</div>
+      </div>
+      <div class="res-cell">
+        <div class="res-label">Output Gap</div>
+        <div class="res-val" id="res-y">—</div>
+      </div>
+      <div class="res-cell res-highlight">
+        <div class="res-label">Actual Inflation</div>
+        <div class="res-val" id="res-pi">—</div>
+      </div>
+    </div>
+
+    <div class="formula-box" id="res-formula"></div>
+
+    <div class="score-box">
+      <div class="score-box-label">Your Score This Round</div>
+      <div class="score-box-val" id="res-score">—</div>
+      <div class="score-box-total">Running Total: <strong id="res-total">—</strong></div>
+    </div>
+
+    <button id="btn-continue" class="btn btn-primary btn-full">Continue →</button>
+  </div>
+</div>
+
+<!-- ── Game Over ── -->
+<div id="screen-gameover" class="screen">
+  <div class="card center">
+    <h2>Game Over</h2>
+    <p class="subtitle">Thank you for participating!</p>
+    <div class="final-box">
+      <div class="final-label">Your Final Score</div>
+      <div class="final-val" id="final-score">—</div>
+      <div class="final-role">Role: <span id="final-role">—</span></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='game.js') }}"></script>
+</body>
+</html>
